@@ -54,8 +54,10 @@ var HABITS = [
 // Personajes: [nombre, emojiGrande, [emoji etapa1..6]].
 // Los emojis son sólo PLACEHOLDERS visibles para comprobar la mecánica.
 // Reemplazá las URLs en Config!PERSONAJES por tus imágenes reales.
+// Opcional 4º elemento: nombres de las 6 etapas (si falta, usa DEFAULT_STAGE_NAMES).
 var CHARACTERS = [
-  ['Goku',           '1f9d1-200d-1f680', ['1f95a','1f423','1f424','1f425','1f985','1f409']],
+  ['Goku',           '1f9d1-200d-1f680', ['1f95a','1f423','1f424','1f425','1f985','1f409'],
+    ['Base', 'Kaio-ken', 'Super Saiyan', 'Super Saiyan 3', 'Super Saiyan Blue', 'Ultra Instinto']],
   // Naruto con arte REAL (jsDelivr, repo fijado a commit para URLs estables).
   // 6 etapas = progresión de poder: base → decidido → jutsu → Modo Sabio →
   // Manto de Kurama → Modo Sabio de los Seis Caminos.
@@ -68,22 +70,36 @@ var CHARACTERS = [
       'https://cdn.jsdelivr.net/gh/vikhyatsingh123/Naruto-Shippuden@09c52b15b1a3d87a27c323eec8e9baa49e0ff8b4/Images/naruto.png',
       'https://cdn.jsdelivr.net/gh/vikhyatsingh123/Naruto-Shippuden@09c52b15b1a3d87a27c323eec8e9baa49e0ff8b4/Images/naruto_ai.jpg',
       'https://cdn.jsdelivr.net/gh/vikhyatsingh123/Naruto-Shippuden@09c52b15b1a3d87a27c323eec8e9baa49e0ff8b4/Images/naruto-six-paths-sage.png'
-    ]],
-  ['Luffy',          '1f451',            ['1f95a','1f423','1f424','1f425','1f406','1f409']],
-  ['Izuku',          '1f7e9',            ['1f95a','1f423','1f424','1f425','1f438','1f409']],
+    ],
+    ['Genin', 'Decidido', 'Rasengan', 'Modo Sabio', 'Manto de Kurama', 'Seis Caminos']],
+  ['Luffy',          '1f451',            ['1f95a','1f423','1f424','1f425','1f406','1f409'],
+    ['Novato', 'Gear 2', 'Gear 3', 'Gear 4', 'Haki del Rey', 'Gear 5']],
+  ['Izuku',          '1f7e9',            ['1f95a','1f423','1f424','1f425','1f438','1f409'],
+    ['Sin Quirk', 'Full Cowl 5%', 'Full Cowl 20%', 'Shoot Style', 'Black Whip', 'One For All 100%']],
   ['Levi',           '2694',             ['1f95a','1f423','1f424','1f425','1f5e1','2694']],
   ['Toji',           '1f5e1',            ['1f95a','1f423','1f424','1f425','1f5e1','2694']],
   ['Gojo Satoru',    '1f441',            ['1f95a','1f423','1f424','1f425','1f440','1f441']],
   ['Itachi Uchiha',  '1f985',            ['1f95a','1f423','1f424','1f425','1f426','1f985']],
   ['Kakashi',        '26a1',             ['1f95a','1f423','1f424','1f425','26a1','1f329']],
   ['Sasuke',         '1f409',            ['1f95a','1f423','1f424','1f425','1f406','1f409']],
-  ['Vegeta',         '1f451',            ['1f95a','1f423','1f424','1f425','1f985','1f409']],
+  ['Vegeta',         '1f451',            ['1f95a','1f423','1f424','1f425','1f985','1f409'],
+    ['Príncipe', 'Super Saiyan', 'Super Vegeta', 'Super Saiyan Blue', 'Mega Instinto', 'Ultra Ego']],
   ['Eren Yeager',    '1f9cc',            ['1f95a','1f423','1f424','1f425','1f98d','1f9cc']],
   ['Killua Zoldyck', '26a1',             ['1f95a','1f423','1f424','1f425','26a1','1f329']]
 ];
 
+// Nombres genéricos de las 6 etapas (para personajes sin nombres propios).
+var DEFAULT_STAGE_NAMES = ['Novato', 'Aprendiz', 'Guerrero', 'Élite', 'Maestro', 'Leyenda'];
+
 // Umbrales de evolución (los % de cada etapa). 6 etapas.
-var EVO_THRESHOLDS = [0, 0.20, 0.40, 0.60, 0.80, 1.00];
+// NO lineales: la 1ª evolución llega rápido (enganche) y la última pide
+// constancia sin exigir perfección absoluta. Se leen desde Config (EVO_UMBRALES).
+var EVO_THRESHOLDS = [0, 0.15, 0.35, 0.55, 0.75, 0.95];
+
+// Un día suma a la RACHA si se cumple al menos este % de los hábitos.
+var STREAK_MIN = 0.7;
+// Hitos de racha que disparan un festejo especial.
+var STREAK_MILESTONES = [3, 7, 14, 21, 30];
 
 // Base del CDN de emojis (Twemoji). Devuelve una PNG por code-point.
 function twemojiUrl(code) {
@@ -175,6 +191,111 @@ function onOpen() {
     .addToUi();
 }
 
+/* ---------------------- CELEBRACIÓN AL MARCAR (toast) --------------------- */
+// Trigger SIMPLE: corre solo al editar, sin permisos extra. Al TILDAR un check de
+// la grilla de Enero muestra un toast: +1, evolución del día, evolución general,
+// día perfecto e hitos de racha. Replica en JS la lógica de las fórmulas.
+
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    var sh = e.range.getSheet();
+    if (sh.getName() !== 'Enero') return;
+    if (e.range.getNumRows() !== 1 || e.range.getNumColumns() !== 1) return;
+    var row = e.range.getRow(), col = e.range.getColumn();
+    if (row < G.HABIT_START || row > G.HABIT_END ||
+        col < G.FIRST_DAY_COL || col > G.LAST_DAY_COL) return;
+    if (String(e.value).toUpperCase() !== 'TRUE') return; // solo al marcar
+    celebrateCheck_(e.source, sh, col - G.FIRST_DAY_COL + 1);
+  } catch (err) {
+    // Nunca romper la edición del usuario por un festejo.
+  }
+}
+
+// Etapa (1..N) para un % según EVO_THRESHOLDS.
+function stageJs_(p) {
+  var s = 1;
+  for (var i = 0; i < EVO_THRESHOLDS.length; i++) if (p >= EVO_THRESHOLDS[i] - 1e-9) s = i + 1;
+  return s;
+}
+
+// % por ritmo (espejo de la celda AN9).
+function paceJs_(totals, N, year) {
+  var now = new Date();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var T = Math.round((today - new Date(year, 0, 1)) / 86400000) + 1;
+  var sum = 0, last = 0;
+  for (var i = 0; i < totals.length; i++) { sum += totals[i]; if (totals[i] > 0) last = i + 1; }
+  if (T > G.DAYS) return sum / (N * G.DAYS);
+  var F = Math.max(0, Math.min(G.DAYS, Math.max(T, last)));
+  if (F === 0) return 0;
+  var excl = F <= 1 ? 0 : (sum - totals[F - 1]) / (N * (F - 1));
+  return Math.min(1, Math.max(excl, sum / (N * F)));
+}
+
+// Largo de la racha (días >= STREAK_MIN) que termina en `day`.
+function streakAt_(totals, N, day) {
+  var run = 0;
+  for (var i = day - 1; i >= 0 && totals[i] / N >= STREAK_MIN - 1e-9; i--) run++;
+  return run;
+}
+
+function celebrateCheck_(ss, sh, day) {
+  var names = sh.getRange(G.HABIT_START, 1, HABITS.length, 1).getValues();
+  var N = names.filter(function (r) { return String(r[0]).trim() !== ''; }).length;
+  if (!N) return;
+
+  var grid = sh.getRange(G.HABIT_START, G.FIRST_DAY_COL, HABITS.length, G.DAYS).getValues();
+  var totals = [];
+  for (var c = 0; c < G.DAYS; c++) {
+    var t = 0;
+    for (var r = 0; r < grid.length; r++) if (grid[r][c] === true) t++;
+    totals.push(t);
+  }
+  var before = totals.slice(); before[day - 1] = Math.max(0, before[day - 1] - 1);
+  var newC = totals[day - 1], oldC = before[day - 1];
+
+  var charName = String(ss.getRangeByName('PERSONAJE').getValue() || '');
+  var year = Number(ss.getRangeByName('ANIO').getValue()) || new Date().getFullYear();
+  var stageNames = DEFAULT_STAGE_NAMES;
+  try {
+    var allNames = ss.getRangeByName('CHAR_NAMES').getValues().map(function (r) { return r[0]; });
+    var idx = allNames.indexOf(charName);
+    if (idx >= 0) stageNames = ss.getRangeByName('STAGE_NAMES').getValues()[idx];
+  } catch (err) { /* usa nombres genéricos */ }
+  var who = charName || 'Tu personaje';
+
+  var msgs = [];
+  // 1) Día perfecto.
+  if (newC >= N) msgs.push('⭐ ¡DÍA PERFECTO! ' + N + '/' + N);
+
+  // 2) Evolución general (ritmo del mes) o, si no, evolución del día.
+  var bigOld = stageJs_(paceJs_(before, N, year)), bigNew = stageJs_(paceJs_(totals, N, year));
+  var dOld = stageJs_(oldC / N), dNew = stageJs_(newC / N);
+  if (bigNew > bigOld) {
+    msgs.push('🌟 ¡' + who + ' alcanzó ' + stageNames[bigNew - 1] + '! (nivel general)');
+  } else if (dNew > dOld && newC < N) {
+    msgs.push('⚡ ¡' + who + ' evolucionó a ' + stageNames[dNew - 1] + ' hoy!');
+  }
+
+  // 3) Racha: solo cuando este check hace que el día cuente.
+  if (oldC / N < STREAK_MIN - 1e-9 && newC / N >= STREAK_MIN - 1e-9) {
+    var run = streakAt_(totals, N, day);
+    if (STREAK_MILESTONES.indexOf(run) >= 0) msgs.push('🔥 ¡RACHA DE ' + run + ' DÍAS!');
+    else if (run >= 2) msgs.push('🔥 Racha: ' + run + ' días');
+    else msgs.push('🔥 ¡Día cumplido! Arranca la racha');
+  }
+
+  // 4) Siempre: +1 con el conteo del día.
+  if (!msgs.length) {
+    var falta = N - newC;
+    msgs.push('✅ +1 · Día ' + day + ': ' + newC + '/' + N +
+      (falta > 0 ? '  (faltan ' + falta + ' para el día perfecto)' : ''));
+  }
+
+  ss.toast(msgs.join('   ·   '), '🎯 ' + who, 5);
+}
+
 /* --------------------------- ORQUESTADOR --------------------------------- */
 
 function buildTemplate() {
@@ -204,8 +325,9 @@ function buildConfigSheet(ss, sh) {
 
   // --- Tabla PERSONAJES: A1:H(n+1) ---
   // A: nombre | B: imagen grande | C..H: etapas 1..6
-  var header = ['Personaje', 'Imagen grande', 'Etapa 1 (0%)', 'Etapa 2 (20%)',
-    'Etapa 3 (40%)', 'Etapa 4 (60%)', 'Etapa 5 (80%)', 'Etapa 6 (100%)'];
+  var header = ['Personaje', 'Imagen grande'].concat(EVO_THRESHOLDS.map(function (t, k) {
+    return 'Etapa ' + (k + 1) + ' (' + Math.round(t * 100) + '%)';
+  }));
   sh.getRange(1, 1, 1, header.length).setValues([header])
     .setFontWeight('bold').setBackground(PALETTE.maroon).setFontColor('#FFF');
 
@@ -232,9 +354,22 @@ function buildConfigSheet(ss, sh) {
     .setFontStyle('italic').setWrap(true);
   sh.getRange(11, 10, 3, 4).merge();
 
+  // --- Nombres de etapa por personaje (O1:T(n+1)), filas alineadas con PERSONAJES ---
+  var SN_COL = 15; // O
+  var snHeader = EVO_THRESHOLDS.map(function (t, k) { return 'Nombre etapa ' + (k + 1); });
+  sh.getRange(1, SN_COL, 1, snHeader.length).setValues([snHeader])
+    .setFontWeight('bold').setBackground(PALETTE.maroon).setFontColor('#FFF');
+  var snRows = CHARACTERS.map(function (c) {
+    return (c[3] && c[3].length === EVO_THRESHOLDS.length) ? c[3] : DEFAULT_STAGE_NAMES;
+  });
+  sh.getRange(2, SN_COL, snRows.length, snHeader.length).setValues(snRows);
+
   // --- Named ranges ---
   ss.setNamedRange('CHAR_TABLE', sh.getRange(2, 1, rows.length, 8)); // A2:H14
   ss.setNamedRange('CHAR_NAMES', sh.getRange(2, 1, rows.length, 1)); // A2:A14
+  ss.setNamedRange('EVO_UMBRALES', sh.getRange(2, 11, EVO_THRESHOLDS.length, 1)); // K2:K7
+  ss.setNamedRange('STAGE_NAMES', sh.getRange(2, SN_COL, snRows.length, snHeader.length)); // O2:T14
+  for (var sc = SN_COL; sc < SN_COL + snHeader.length; sc++) sh.setColumnWidth(sc, 130);
 
   sh.setColumnWidth(1, 140);
   for (var c = 2; c <= 8; c++) sh.setColumnWidth(c, 230);
@@ -282,10 +417,13 @@ function buildAnualDashboard(ss, sh) {
   // --- Imagen grande del personaje (cambia con el dropdown) ---
   sh.getRange('B7:E20').merge()
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
-  // Evoluciona con el % ANUAL (promedio de los 12 meses), no con una imagen fija.
+  // Evoluciona con el RITMO ANUAL: promedio del % por ritmo (col K oculta) de los
+  // meses YA transcurridos (no de los 12), con los umbrales de Config (EVO_UMBRALES).
   sh.getRange('B7').setFormula(
     '=IFERROR(IMAGE(INDEX(CHAR_TABLE,MATCH(PERSONAJE,CHAR_NAMES,0),' +
-    '3+MIN(5,FLOOR(AVERAGE($J$4:$J$15)/0.2))),1),"")');
+    '2+MATCH(AVERAGE(OFFSET($K$4,0,0,' +
+    'IF(ANIO<YEAR(TODAY()),12,IF(ANIO>YEAR(TODAY()),1,MONTH(TODAY()))),1)),' +
+    'EVO_UMBRALES,1)),1),"")');
   for (var r = 7; r <= 20; r++) sh.setRowHeight(r, 26);
 
   // Borde del recuadro de imagen.
@@ -305,14 +443,17 @@ function buildAnualDashboard(ss, sh) {
     var row = 4 + m;
     sh.getRange(row, 8).setValue(meses[m]);
     if (meses[m] === 'Enero') {
-      // Lee las celdas técnicas de la hoja Enero (AN2=completado, AN4=%).
+      // Lee las celdas técnicas de la hoja Enero (AN2=completado, AN4=%, AN9=% por ritmo).
       sh.getRange(row, 9).setFormula("=IFERROR(Enero!$AN$2,0)");
       sh.getRange(row, 10).setFormula("=IFERROR(Enero!$AN$4,0)").setNumberFormat('0%');
+      sh.getRange(row, 11).setFormula("=IFERROR(Enero!$AN$9,0)");
     } else {
       sh.getRange(row, 9).setValue(0);
       sh.getRange(row, 10).setValue(0).setNumberFormat('0%');
+      sh.getRange(row, 11).setValue(0);
     }
   }
+  sh.hideColumns(11); // K: % por ritmo de cada mes (alimenta el retrato anual)
   sh.getRange('H3:J15').setBorder(true, true, true, true, true, true,
     '#CCC', SpreadsheetApp.BorderStyle.SOLID);
 
@@ -365,9 +506,13 @@ function buildMonthSheet(ss, sh) {
   for (var d2 = 1; d2 <= G.DAYS; d2++) {
     var col2 = FD + d2 - 1;
     var pctCell = a1(G.PCT_ROW, col2);
+    var totCell2 = a1(G.TOTAL_ROW, col2);
+    // Días FUTUROS sin marcas = vacío (no se confunden con un día fallado).
+    // Etapa = MATCH contra los umbrales no lineales de Config (EVO_UMBRALES).
     sh.getRange(G.AVATAR_ROW, col2).setFormula(
-      '=IFERROR(IMAGE(INDEX(CHAR_TABLE,MATCH(PERSONAJE,CHAR_NAMES,0),' +
-      '3+MIN(5,FLOOR(' + pctCell + '/0.2)))),"")')
+      '=IF(AND(' + totCell2 + '=0,DATE(ANIO,1,' + d2 + ')>TODAY()),"",' +
+      'IFERROR(IMAGE(INDEX(CHAR_TABLE,MATCH(PERSONAJE,CHAR_NAMES,0),' +
+      '2+MATCH(' + pctCell + ',EVO_UMBRALES,1))),""))')
       .setHorizontalAlignment('center').setVerticalAlignment('middle');
   }
 
@@ -486,6 +631,25 @@ function applyWeekConditionalFormatting_(sh) {
       .setRanges([bandRng]).build());
   }
 
+  // 3) Día PERFECTO (100%): avatar y nº de día en dorado.
+  //    Día PASADO sin ninguna marca: avatar en gris (se distingue de un día futuro).
+  //    El año se lee de la celda técnica $AN$13 (=ANIO) para no depender de
+  //    named ranges de otra hoja dentro del formato condicional.
+  var avRng = sh.getRange(G.AVATAR_ROW, G.FIRST_DAY_COL, 1, G.DAYS);
+  var dnRng = sh.getRange(G.DAYNUM_ROW, G.FIRST_DAY_COL, 1, G.DAYS);
+  var perfectF = '=' + pctColLetter + '$' + G.PCT_ROW + '>=1';
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied(perfectF).setBackground('#FFE082')
+    .setRanges([avRng]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied(perfectF).setBackground('#F9A825').setFontColor('#FFFFFF')
+    .setRanges([dnRng]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied('=AND(' + pctColLetter + '$' + G.TOTAL_ROW + '=0,DATE($AN$13,1,' +
+      pctColLetter + '$' + G.DAYNUM_ROW + ')<TODAY())')
+    .setBackground('#E0E0E0')
+    .setRanges([avRng]).build());
+
   sh.setConditionalFormatRules(rules);
 }
 
@@ -508,6 +672,59 @@ function buildProgressPanels_(ss, sh) {
     '=IFERROR(' + a1(2, MC) + '/' + a1(3, MC) + ',0)');               // AN4 %
   sh.getRange(1, MC, 4, 1).setFontColor('#FFFFFF').setFontSize(8);    // "ocultar"
 
+  // ---- RITMO, ETAPA, RACHA y PRÓXIMA EVOLUCIÓN (col AN, filas 5 y 8-15) ----
+  // (AN6:AO7 ya lo usa la dona.) Referencias cortas:
+  var NST = EVO_THRESHOLDS.length;
+  var cF = a1(5, MC), cToday = a1(8, MC), cPace = a1(9, MC), cStage = a1(10, MC);
+  var cStreak = a1(11, MC), cBest = a1(12, MC), cNeed = a1(14, MC), cProg = a1(15, MC);
+  var cDone = a1(2, MC), cPct = a1(4, MC);
+  var T = '(TODAY()-DATE(ANIO,1,1)+1)'; // nº de día de HOY dentro de enero
+  var lastChecked = 'IFERROR(MAX(FILTER(COLUMN(' + totRange + ')-COLUMN(' +
+    a1(G.TOTAL_ROW, FD) + ')+1,' + totRange + '>0)),0)';
+  // AN5 = día "frontera": hoy (si el mes está en curso) o el último día con marcas.
+  sh.getRange(5, MC).setFormula(
+    '=MAX(0,MIN(' + G.DAYS + ',MAX(' + T + ',' + lastChecked + ')))');
+  // AN8 = marcas del día frontera.
+  sh.getRange(8, MC).setFormula(
+    '=IF(' + cF + '=0,0,INDEX(' + totRange + ',1,' + cF + '))');
+  // AN9 = % por RITMO: lo hecho vs lo posible HASTA HOY (no vs el mes entero).
+  //   MAX(sin contar hoy, contando hoy) => marcar nunca baja el ritmo y a la
+  //   mañana no "perdés" nivel por no haber marcado todavía. Mes cerrado => AN4.
+  sh.getRange(9, MC).setFormula(
+    '=IFERROR(IF(' + T + '>' + G.DAYS + ',' + cPct + ',IF(' + cF + '=0,0,MIN(1,MAX(' +
+    'IF(' + cF + '<=1,0,(' + cDone + '-' + cToday + ')/(NUM_HABITOS*(' + cF + '-1))),' +
+    cDone + '/(NUM_HABITOS*' + cF + '))))),0)');
+  // AN10 = etapa general (1..6) según los umbrales de Config.
+  sh.getRange(10, MC).setFormula('=MATCH(' + cPace + ',EVO_UMBRALES,1)');
+
+  // Racha: AR = día cumplido (>= STREAK_MIN), AS = largo de la racha que termina ese día.
+  var SF = 44, SR = 45; // AR, AS
+  for (var sd = 1; sd <= G.DAYS; sd++) {
+    var tc = a1(G.TOTAL_ROW, FD + sd - 1);
+    sh.getRange(sd, SF).setFormula('=IFERROR(' + tc + '/NUM_HABITOS>=' + STREAK_MIN + ',FALSE)');
+    sh.getRange(sd, SR).setFormula(sd === 1
+      ? '=IF(' + a1(1, SF) + ',1,0)'
+      : '=IF(' + a1(sd, SF) + ',' + a1(sd - 1, SR) + '+1,0)');
+  }
+  sh.getRange(1, SF, G.DAYS, 2).setFontColor('#FFFFFF').setFontSize(8);
+  var flagsR = a1(1, SF) + ':' + a1(G.DAYS, SF), runsR = a1(1, SR) + ':' + a1(G.DAYS, SR);
+  // AN11 = racha actual (si hoy todavía no llegó al mínimo, cuenta la de ayer: hay tiempo).
+  sh.getRange(11, MC).setFormula(
+    '=IF(' + cF + '=0,0,IF(INDEX(' + flagsR + ',' + cF + '),INDEX(' + runsR + ',' + cF + '),' +
+    'IF(' + cF + '>1,INDEX(' + runsR + ',' + cF + '-1),0)))');
+  sh.getRange(12, MC).setFormula('=MAX(' + runsR + ')');               // AN12 mejor racha
+  sh.getRange(13, MC).setFormula('=ANIO');                             // AN13 año (para formato condicional)
+  // AN14 = hábitos que faltan HOY para la próxima etapa.
+  sh.getRange(14, MC).setFormula(
+    '=IF(' + cStage + '>=' + NST + ',0,MAX(1,CEILING(ROUND(INDEX(EVO_UMBRALES,' + cStage +
+    '+1)*NUM_HABITOS*MAX(1,' + cF + ')-' + cDone + ',6))))');
+  // AN15 = avance DENTRO de la etapa actual (0..1) para la barra "próxima evolución".
+  sh.getRange(15, MC).setFormula(
+    '=IF(' + cStage + '>=' + NST + ',1,MAX(0,MIN(1,(' + cPace + '-INDEX(EVO_UMBRALES,' + cStage +
+    '))/(INDEX(EVO_UMBRALES,' + cStage + '+1)-INDEX(EVO_UMBRALES,' + cStage + ')))))');
+  sh.getRange(5, MC).setFontColor('#FFFFFF').setFontSize(8);
+  sh.getRange(8, MC, 8, 1).setFontColor('#FFFFFF').setFontSize(8);
+
   /* ===== TENDENCIA (% diario) — banda D1:AH5 ===== */
   // El relleno verde se pinta con formato condicional (de abajo hacia arriba
   // según el % de cada día) en applyWeekConditionalFormatting_. Acá solo dejamos
@@ -518,13 +735,33 @@ function buildProgressPanels_(ss, sh) {
   sh.getRange(1, RC, 1, 3).merge().setValue('Hábitos completados')
     .setBackground(PALETTE.maroon).setFontColor('#FFF').setFontWeight('bold')
     .setHorizontalAlignment('center').setFontSize(10);
-  sh.getRange(2, RC, 2, 3).merge().setFormula('=SUM(' + totRange + ')')
-    .setFontSize(24).setFontWeight('bold').setFontColor(PALETTE.maroon)
+  // Nº de hábitos completados (AJ2:AJ3) + racha 🔥 (AK2:AL3).
+  sh.getRange(2, RC, 2, 1).merge().setFormula('=SUM(' + totRange + ')')
+    .setFontSize(22).setFontWeight('bold').setFontColor(PALETTE.maroon)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
-  // Imagen grande: evoluciona con el % MENSUAL (AN4), representa el "nivel general" del mes.
-  sh.getRange(4, RC, 7, 3).merge()
+  sh.getRange(2, RC + 1, 2, 2).merge()
+    .setFormula('="🔥 Racha: "&' + cStreak + '&IF(' + cStreak + '=1," día"," días")&CHAR(10)&' +
+      '"Mejor: "&' + cBest)
+    .setFontSize(10).setFontWeight('bold').setFontColor('#E65100').setWrap(true)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  // Imagen grande: evoluciona con el % por RITMO (AN10), el "nivel general" del mes.
+  sh.getRange(4, RC, 4, 3).merge()
     .setFormula('=IFERROR(IMAGE(INDEX(CHAR_TABLE,MATCH(PERSONAJE,CHAR_NAMES,0),' +
-      '3+MIN(5,FLOOR(' + a1(4, MC) + '/0.2))),1),"")')
+      '2+' + cStage + '),1),"")')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  // Próxima evolución: nombre de etapa (fila 8), barra (fila 9) y mensaje (fila 10).
+  sh.getRange(8, RC, 1, 3).merge()
+    .setFormula('="Etapa "&' + cStage + '&"/' + NST + ' · "&IFERROR(INDEX(STAGE_NAMES,' +
+      'MATCH(PERSONAJE,CHAR_NAMES,0),' + cStage + '),"")')
+    .setFontSize(9).setFontWeight('bold').setFontColor(PALETTE.maroon)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sh.getRange(9, RC, 1, 3).merge()
+    .setFormula('=SPARKLINE(' + cProg + ',{"charttype","bar";"max",1;"color1","#F9A825"})');
+  sh.getRange(10, RC, 1, 3).merge()
+    .setFormula('=IF(' + cStage + '>=' + NST + ',"🏆 ¡Forma final! Mantenela",' +
+      'IF(' + cNeed + '<=NUM_HABITOS-' + cToday + ',"⚡ Faltan "&' + cNeed + '&IF(' + cNeed +
+      '=1," hábito"," hábitos")&" para evolucionar","💪 Seguí así: evolucionás en los próximos días"))')
+    .setFontSize(8).setFontWeight('bold').setFontColor(PALETTE.text).setWrap(true)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
   sh.getRange(2, RC, 9, 3)
     .setBorder(true, true, true, true, false, false, PALETTE.maroon, SpreadsheetApp.BorderStyle.SOLID);
@@ -599,7 +836,7 @@ function buildProgressPanels_(ss, sh) {
     .setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true).setFontSize(9);
   sh.getRange(rgBar, 1, rgBarH, 3).merge()
     .setFormula('=IFERROR(IMAGE(INDEX(CHAR_TABLE,MATCH(PERSONAJE,CHAR_NAMES,0),' +
-      '3+MIN(5,FLOOR(' + a1(4, MC) + '/0.2))),1),"")')
+      '2+' + cStage + '),1),"")')
     .setHorizontalAlignment('center').setVerticalAlignment('middle')
     .setBorder(true, true, true, true, false, false, PALETTE.maroon, SpreadsheetApp.BorderStyle.SOLID);
 

@@ -1,0 +1,4 @@
+# Lo que `clasp push` NO debe subir a Apps Script
+**/node_modules/**
+.*/**
+Ejemplos/**

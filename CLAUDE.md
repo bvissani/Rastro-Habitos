@@ -112,19 +112,37 @@ grid. All the rest is drawn inside cells:
 possible as a floating chart (the two we allow: donut + trend area) — hence the stepped
 conditional-format fallback under the trend.
 
-### Character evolution + images (big images evolve too)
+### Character evolution + images (reward system)
 
-- Each day's avatar (`AVATAR_ROW`) = `IMAGE(INDEX(CHAR_TABLE, MATCH(PERSONAJE,CHAR_NAMES,0),
-  3+MIN(5,FLOOR(dayPct/0.2))))`. `dayPct` = that day's `Total/día` ÷ `NUM_HABITOS`.
-- **Big images also evolve** (they no longer use a fixed URL), driven by an *accumulated* %, not the
-  daily one — the "general level" the character has reached. Same stage columns and `3+MIN(5,
-  FLOOR(pct/0.2))` mapping as the daily avatar, all with `IMAGE(...,1)` fit mode:
-  - Enero, `Hábitos completados` (top-right) and `Resumen General` (bottom-left) → `pct = AN4`
-    (the monthly %, same as "Progreso Mensual").
-  - Anual Dashboard portrait (`B7`) → `pct = AVERAGE($J$4:$J$15)` (average of the 12 monthly %).
-- Consequence: `CHAR_TABLE` column 2 (the old "big-image" URL) is now **unused** — every image reads
-  the 6 stage columns (3–8). Real art is swapped only by editing those stage URLs in
-  `Config!PERSONAJES` — never hardcode image data elsewhere.
+- **Thresholds are NON-linear and live in Config**: `EVO_THRESHOLDS = [0,.15,.35,.55,.75,.95]` →
+  `Config!K2:K7` = named range **`EVO_UMBRALES`**. Every image picks its stage with
+  `2+MATCH(pct, EVO_UMBRALES, 1)` (never `FLOOR(pct/0.2)` anymore).
+- **Stage names**: `CHARACTERS[i][3]` (optional, else `DEFAULT_STAGE_NAMES`) → `Config!O2:T14` =
+  named range **`STAGE_NAMES`** (rows aligned with `CHAR_NAMES`).
+- **Daily avatar** (`AVATAR_ROW`): stage from that day's %; **blank on future days** with 0 checks.
+  CF: perfect day (100%) = gold avatar + gold day number; past day with 0 checks = gray avatar.
+- **Big images use the PACE %, not the whole-month %** (the old `AN4` made the final form appear
+  only on Jan 31). Technical cells in col AN:
+  - `AN5` frontier day = `MAX(today's day-of-Jan, last day with any check)` capped 0..31.
+  - `AN8` checks on the frontier day. `AN9` **pace %** = `MAX(done excl. frontier / days before,
+    done / days incl. frontier)` → checking never lowers it; closed month (today > Jan 31) = `AN4`.
+  - `AN10` stage (1..6) from `AN9`. `AN14` habits still needed today for next stage. `AN15`
+    progress inside the current stage (0..1). `AN13` = `ANIO` (CF formulas use it, not the named range).
+  - Streak: hidden `AR1:AR31` (day ≥ `STREAK_MIN` = 70%) and `AS1:AS31` (run length). `AN11`
+    current streak (today not yet counted → yesterday's run), `AN12` best.
+- Right panel top: `AJ2:AJ3` count, `AK2:AL3` 🔥 streak, `AJ4:AL7` big image (`AN10`), row 8
+  "Etapa X/6 · name", row 9 gold progress `SPARKLINE` (`AN15`), row 10 "Faltan N hábitos…".
+  Resumen General portrait also uses `AN10`.
+- Anual Dashboard portrait: average of hidden col **K** (pace % per month; Enero = `Enero!AN9`) over
+  the months already elapsed of `ANIO`.
+- **`onEdit(e)` simple trigger** (no extra scopes) → `celebrateCheck_`: when a grid checkbox in
+  Enero is ticked, toasts +1 / daily evolution / general evolution / perfect day / streak
+  milestones (`STREAK_MILESTONES`). `paceJs_`/`stageJs_`/`streakAt_` mirror the sheet formulas —
+  keep them in sync if the formulas change.
+- Testing note: with `ANIO` in the past (e.g. 2026 viewed in Oct 2026) January is "closed", so pace
+  = monthly %. Set `ANIO` to a future year to test pace behaviour (frontier = last checked day).
+- `CHAR_TABLE` column 2 (the old "big-image" URL) is **unused** — every image reads the 6 stage
+  columns (3–8). Real art is swapped only by editing those stage URLs in `Config!PERSONAJES`.
 
 ### Geometry lives in `G` (LATERAL layout)
 

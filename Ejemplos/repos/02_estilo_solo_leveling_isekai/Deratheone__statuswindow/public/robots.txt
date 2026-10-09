@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://statuswindow.vercel.app/sitemap.xml
