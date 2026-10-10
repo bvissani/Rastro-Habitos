@@ -10,6 +10,7 @@ Documento central de evaluación de repositorios y proyectos de código abierto 
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **01. HabitTrove** | Hábito $\rightarrow$ Monedas $\rightarrow$ Lista de Deseos (vida real) | ✅ **Excelente** (Monedas, contabilidad/ledger, wishlist con link) | ❌ Nulo (solo reversión si desmarcas) | Refuerzo positivo tangible, visualización de meta deseada | **Aprobada la economía**. Extraída a doc técnico y descartado el repo por UI austera. |
 | **02. StatusWindow** | Actividad $\rightarrow$ EXP $\rightarrow$ Atributos (STR/INT/MP) $\rightarrow$ Orbe de Habilidades | ❌ Nulo (solo EXP y puntos de habilidad virtuales) | ❌ Nulo (no hay pérdida de HP ni penalización) | Fantasía de poder (*Solo Leveling*), feedback audiovisual, validación anti-trampa | **Aprobada la UI y anti-trampa**. Descartado el bucle de juego por desconexión con la vida real. |
+| **03. LifeOS** | "Sistema operativo de vida" todo en uno (Hábitos, Finanzas, Salud, Tareas, RPG, IA) | ⚠️ Indirecto (módulo de finanzas reales de ingresos/gastos, sin monedas gamificadas) | ❌ Nulo (sin daño por procrastinación ni penalización severa) | Identidad RPG, cadencia de hábitos, mapa de calor de 30 días, evolución botánica de rachas | **Aprobada la cadencia de hábitos, el mapa de calor, finanzas y evolución botánica**. Descartado por sobrecomplejidad y saturación de tutoriales. |
 
 ---
 
@@ -75,33 +76,65 @@ Documento central de evaluación de repositorios y proyectos de código abierto 
 
 ---
 
+### 3. LifeOS (`lifeos-app/lifeos`)
+
+* **Concepto:** Una suite integral todo-en-uno ("Life Operating System") que reúne calendario, tareas, hábitos, finanzas, métricas de salud, diario, IA y un minimundo RPG con clases.
+* **Stack:** Vite, React 19, TypeScript, TailwindCSS v4, Zustand, Python Flask (backend local SQLite).
+
+#### 💡 Lo Rescatable (Para robar/implementar en Rastro):
+1. **Cadencia y Frecuencia de Hábitos (Realismo Psicológico):**
+   * Separación clara entre hábitos **Diarios**, **Días laborales (Lunes a Viernes)**, **Fines de semana** y **Semanales**.
+   * *Impacto en UX:* Destruye la "culpa de fin de semana" (no penaliza un hábito laboral el sábado o domingo).
+2. **Visualización de Hábitos y Estadísticas de Racha:**
+   * **Mapa de calor de 30 días (*Heatmap* estilo GitHub)** para cada hábito individual, mostrando intensidad (0 = no hecho, 1 = parcial, 2 = completo).
+   * **Insignia de "Semana Perfecta"** (insignia con brillo para hábitos con 7/7 días completados).
+   * Visualización simultánea de: Tasa de cumplimiento (%), Racha actual vs. Mejor racha histórica, y total de registros.
+3. **Metáfora Botánica / Evolución Orgánica de Rachas:**
+   * A medida que la racha avanza en hitos (1, 3, 7, 21, 50 días), la planta evoluciona visualmente: *Semilla $\rightarrow$ Brote $\rightarrow$ Joven $\rightarrow$ Madura $\rightarrow$ Próspera $\rightarrow$ Ancestral*. Brinda un sentido de cultivo y cuidado continuo.
+4. **Módulo de Finanzas Personales Limpio:**
+   * Registro simple de ingresos y gastos con flujo de caja neto mensual (`Net Cashflow = Ingresos - Gastos`).
+   * Alertas de facturas pendientes con cálculo de días hasta el vencimiento (`X días vencido` / `Hoy`).
+5. **Cálculo Derivado de Atributos del Personaje (`deriveStats`):**
+   * Las estadísticas no se suben inventando números; se derivan automáticamente de la actividad real: Salud (del sueño/ejercicio), Productividad (de tareas), Constancia (del promedio de rachas de hábitos).
+
+#### ❌ Por qué NO convence como producto para el usuario final (La Trampa de la Sobrecomplejidad):
+* **"Completo $\neq$ Complejo":** Quisieron meter 10 aplicaciones en una (Notion + Trello + MyFitnessPal + Duolingo + RPG Maker). El usuario se pierde en un laberinto de navegación.
+* **Saturación de Tutoriales (*Spotlight Tours* everywhere):** Tener tutoriales y modales explicativos en cada esquina es el síntoma definitivo de una **interfaz poco intuitiva**. Una app de hábitos debe entenderse en 3 segundos sin leer un manual.
+* **Módulos de Relleno que Diluyen el Foco:** Secciones como "Lecciones", "Replicador de piezas" o mini-historias desconectadas aburren y distraen del objetivo principal: **construir disciplina diaria**.
+
+---
+
 ## 🧬 La Fórmula Perfecta para "Rastro Hábitos"
 
-De la combinación de estos dos primeros proyectos surge con claridad la arquitectura que buscamos construir:
+De la combinación de estos proyectos surge con claridad la arquitectura que buscamos construir:
 
 ```mermaid
 graph TD
-    A[Hábito o Tarea Real] -->|Completado| B(Validación Anti-Trampa)
+    A[Hábito con Cadencia: Diario / Laboral / Finde] -->|Completado| B(Validación Anti-Trampa)
     B -->|Aprobado| C[Feedback Audiovisual Épico: Sonido + Partículas]
     C --> D[EXP para Atributos: Fuerza, Inteligencia, Maná]
     C --> E[Monedas de Oro Virtuales: Ledger Contable]
+    C --> F[Evolución de Racha: Semilla a Ancestral + Heatmap 30d]
     
-    D --> F[Ventana de Estado Estilo Solo Leveling]
-    E --> G[Lista de Deseos con Enlace a Recompensa Real]
+    D --> G[Ventana de Estado Estilo Solo Leveling]
+    E --> H[Lista de Deseos con Enlace a Recompensa Real]
     
-    H[No completar hábito antes de medianoche] -->|Falla| I[Castigo: Pérdida de HP + Ruptura de Racha + Pérdida de Monedas]
+    I[No completar hábito antes de medianoche] -->|Falla| J[Castigo: Pérdida de HP + Ruptura de Racha + Pérdida de Monedas]
 ```
 
 ### Elementos que adoptamos de esta etapa:
 1. **De HabitTrove:** El sistema contable de monedas (`CoinTransaction`), reversibilidad (`UNDO`), y la Lista de Deseos (`Wishlist`) con costo y enlaces web reales.
-2. **De StatusWindow:** La estética de Ventana de Estado flotante, la división Fuerza / Inteligencia / Maná, el modal de verificación cualitativa y la retroalimentación por audio.
-3. **El ingrediente faltante para los próximos candidatos:** **Aversión a la pérdida y penalización real** (sistema de Salud / HP, jefes de hábitos, penalizaciones por fallar y protección de rachas).
+2. **De StatusWindow:** La estética de Ventana de Estado flotante (*Solo Leveling*), la división Fuerza / Inteligencia / Maná, el modal de verificación cualitativa y la retroalimentación por audio.
+3. **De LifeOS:** La cadencia de hábitos (diario, días laborales, fines de semana), el mapa de calor de 30 días, la insignia de semana perfecta, la evolución orgánica de rachas y el control de finanzas básicas.
+4. **El ingrediente faltante para los próximos candidatos:** **Aversión a la pérdida y penalización real** (sistema de Salud / HP, jefes de hábitos, penalizaciones por fallar y protección de rachas).
 
 ---
 
 ## 📝 Próximos Candidatos a Evaluar en la Lista
 
-- [ ] **`lifeos-app/lifeos`** (Sistema completo con economía de oro, tiendas, misiones y rutinas).
+- [x] **`dohsimpson/HabitTrove`** (Analizado y extraído a doc).
+- [x] **`Deratheone/statuswindow`** (Analizado y documentado).
+- [x] **`lifeos-app/lifeos`** (Analizado y documentado).
 - [ ] **`DavidZerox8/TaskMaster`** (Gestión de tareas y misiones RPG).
 - [ ] **`redpangilinan/iotawise`** / **`daya0576/beaverhabits`** (Referentes de UX minimalista y mapas de calor de rachas).
 - [ ] **`HabitRPG/habitica`** (El referente histórico de pérdida de HP y combate por hábitos).
