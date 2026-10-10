@@ -21,7 +21,4 @@ desktop.ini
 out/
 
 # Repos de terceros clonados para investigación (se re-clonan con Ejemplos/clonar_repos.ps1)
-Ejemplos/repos/*
-!Ejemplos/repos/02_estilo_solo_leveling_isekai/
-Ejemplos/repos/02_estilo_solo_leveling_isekai/*
-!Ejemplos/repos/02_estilo_solo_leveling_isekai/Deratheone__statuswindow/
+Ejemplos/repos/
